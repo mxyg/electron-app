@@ -1,26 +1,95 @@
 // main.js
 
 // Modules to control application life and create native browser window
-const { app, BrowserWindow } = require('electron')
-const path = require('path')
+const { app, BrowserWindow, Menu, MenuItem, ipcMain } = require('electron')
+//-----------------------------------------------------------------
+const { appMenuTemplate } = require('./appmenu.js');
+//-----------------------------------------------------------------
 
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+//是否可以安全退出
+let safeExit = false;
+let mainWindow;
+const path = require('path')
 function createWindow () {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true, 
+      contextIsolation: false,
       enableRemoteModule: true,
+      preload: path.join(__dirname, 'preload.js'),
     }
   })
-  mainWindow.webContents.openDevTools()
   // and load the index.html of the app.
   mainWindow.loadFile('index.html')
 
   // Open the DevTools.
-  // mainWindow.webContents.openDevTools()
+  mainWindow.webContents.openDevTools()
+
+  //-----------------------------------------------------------------
+  //增加主菜单（在开发测试时会有一个默认菜单，但打包后这个菜单是没有的，需要自己增加）
+  const menu=Menu.buildFromTemplate(appMenuTemplate); //从模板创建主菜单
+
+  menu.items[0].submenu.append(new MenuItem({
+    label: '新建',
+    click(){
+      mainWindow.webContents.send('action', 'new');
+    },
+    accelerator: 'CmdorCtrl+n' 
+  }));
+  menu.items[0].submenu.append(new MenuItem({
+    label: '打开',
+    click(){
+      mainWindow.webContents.send('action', 'open'); //点击后向主页渲染进程发送“打开文件”的命令
+    },
+    accelerator: 'CmdorCtrl+o'
+  }));
+  menu.items[0].submenu.append(new MenuItem({
+    label: '打开最近使用',
+    role: 'recentdocuments',
+    submenu: [
+      {
+        label: '清除最近使用',
+        role: 'clearrecentdocuments'
+      }
+    ]
+  }));
+  menu.items[0].submenu.append(new MenuItem({
+    label: '保存',
+    click(){
+      mainWindow.webContents.send('action', 'save');
+    },
+    accelerator: 'CmdorCtrl+s'
+  }));
+  //添加一个分隔符
+  menu.items[0].submenu.append(new MenuItem({
+    type: 'separator'
+  }));
+  //再添加一个名为Exit的同级菜单
+  menu.items[0].submenu.append(new MenuItem({
+    label: '退出',
+    role: 'quit'
+  }));
+  Menu.setApplicationMenu(menu); //注意：这个代码要放到菜单添加完成之后，否则会造成新增菜单的快捷键无效
+  mainWindow.on('close', (e) => {
+    if(!safeExit){
+      e.preventDefault();
+      mainWindow.webContents.send('action', 'exiting');
+    }
+  });
+  //-----------------------------------------------------------------
+
+  // Emitted when the window is closed.
+  mainWindow.on('closed', () => {
+    // Dereference the window object, usually you would store windows
+    // in an array if your app supports multi windows, this is the time
+    // when you should delete the corresponding element.
+    mainWindow = null;
+  });
 }
 
 // This method will be called when Electron has finished
@@ -35,8 +104,11 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
     
   })
-})
+  app.on('open-file', function (event, path) {
+    mainWindow.webContents.send('action', 'recentdocuments', path); 
+  })
 
+})
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
@@ -44,5 +116,18 @@ app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit()
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. 也可以拆分成几个文件，然后用 require 导入。
+//监听与渲染进程的通信
+ipcMain.on('reqaction', (event, arg, message) => {
+  switch(arg){
+    case 'exit':
+      //做点其它操作：比如记录窗口大小、位置等，下次启动时自动使用这些设置；不过因为这里（主进程）无法访问localStorage，这些数据需要使用其它的方式来保存和加载，这里就不作演示了。这里推荐一个相关的工具类库，可以使用它在主进程中保存加载配置数据：https://github.com/sindresorhus/electron-store
+      //...
+      safeExit=true;
+      app.quit();//退出程序
+      break;
+    case 'addRecentDocument':
+      app.addRecentDocument(message);
+      break;
+  }
+});
+
