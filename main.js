@@ -1,7 +1,13 @@
 // main.js
 
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, Menu, MenuItem, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, MenuItem, ipcMain } = require('electron');
+const path = require('path')
+
+require('electron-reload')(__dirname, {
+  electron: require(path.join(__dirname, 'node_modules', 'electron')),
+  hardResetMethod: 'exit'
+});
 //-----------------------------------------------------------------
 const { appMenuTemplate } = require('./appmenu.js');
 //-----------------------------------------------------------------
@@ -11,7 +17,6 @@ const { appMenuTemplate } = require('./appmenu.js');
 //是否可以安全退出
 let safeExit = false;
 let mainWindow;
-const path = require('path')
 function createWindow () {
   // Create the browser window.
   mainWindow = new BrowserWindow({
