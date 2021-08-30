@@ -1,9 +1,12 @@
 const express = require('express');
 const fs = require("fs");
-const data_path = 'data/data_file/'
+
+const path = require('path');
+
+const data_path = path.join(__dirname, 'data_file/');
 
 const multer  = require('multer');
-const upload = multer({ dest: 'data/data_tmp/' });
+const upload = multer({ dest: path.join(__dirname, 'data_tmp/') });
 
 
 const router = express.Router();
