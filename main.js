@@ -1,21 +1,24 @@
 // main.js
 
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, Menu, MenuItem, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, MenuItem, ipcMain, remote, dialog } = require('electron');
+
 const path = require('path')
+const serve = require('electron-serve');
+
+const loadURL = serve({directory: 'renderer'});
+
+const { appMenuTemplate } = require('./appmenu.js');
 
 require('electron-reload')(__dirname, {
   electron: require(path.join(__dirname, 'node_modules', 'electron')),
   hardResetMethod: 'exit'
 });
-//-----------------------------------------------------------------
-const { appMenuTemplate } = require('./appmenu.js');
-//-----------------------------------------------------------------
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 //是否可以安全退出
-let safeExit = false;
+let safeExit = true;
 let mainWindow;
 function createWindow () {
   // Create the browser window.
@@ -28,12 +31,15 @@ function createWindow () {
       enableRemoteModule: true,
       preload: path.join(__dirname, 'preload.js'),
     }
-  })
+  });
   // and load the index.html of the app.
-  mainWindow.loadFile('index.html')
+  //mainWindow.loadFile('index.html');
+  //loadURL(mainWindow);
 
+	// The above is equivalent to this:
+	mainWindow.loadURL('http://localhost:3000/');
   // Open the DevTools.
-  mainWindow.webContents.openDevTools()
+  mainWindow.webContents.openDevTools();
 
   //-----------------------------------------------------------------
   //增加主菜单（在开发测试时会有一个默认菜单，但打包后这个菜单是没有的，需要自己增加）
@@ -49,6 +55,17 @@ function createWindow () {
   menu.items[0].submenu.append(new MenuItem({
     label: '打开',
     click(){
+      const files = dialog.showOpenDialogSync(mainWindow, {
+        filters: [
+          { name: "JSON", extensions: ['json'] }, 
+          { name: 'All Files', extensions: ['*'] } ],
+        properties: ['openFile']
+      });
+      console.log(files);
+      if(files) {
+        currentFile = files[0];
+        app.addRecentDocument(currentFile);
+      };
       mainWindow.webContents.send('action', 'open'); //点击后向主页渲染进程发送“打开文件”的命令
     },
     accelerator: 'CmdorCtrl+o'
@@ -81,6 +98,7 @@ function createWindow () {
   }));
   Menu.setApplicationMenu(menu); //注意：这个代码要放到菜单添加完成之后，否则会造成新增菜单的快捷键无效
   mainWindow.on('close', (e) => {
+    app.quit();//退出程序
     if(!safeExit){
       e.preventDefault();
       mainWindow.webContents.send('action', 'exiting');
@@ -101,25 +119,33 @@ function createWindow () {
 // initialization and is ready to create browser windows.
 // 部分 API 在 ready 事件触发后才能使用。
 app.whenReady().then(() => {
-  createWindow()
+  //nodejs 服务
+  new BrowserWindow({
+    webPreferences: {
+      nodeIntegration: true, 
+      contextIsolation: false,
+    }
+  }).loadFile(path.join(__dirname, 'src/server/index.html'));
+  //主窗口
+  createWindow();
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
     
-  })
+  });
   app.on('open-file', function (event, path) {
     mainWindow.webContents.send('action', 'recentdocuments', path); 
-  })
+  });
 
-})
+});
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', function () {
-  if (process.platform !== 'darwin') app.quit()
-})
+  if (process.platform !== 'darwin') app.quit();
+});
 
 //监听与渲染进程的通信
 ipcMain.on('reqaction', (event, arg, message) => {

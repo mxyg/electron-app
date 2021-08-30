@@ -84,6 +84,20 @@ module.exports.appMenuTemplate = [
     ]
   },
   {
+    label: '窗口',
+    role: 'window',
+    submenu: [
+      {
+        label: '最小化',
+        role: 'minimize'
+      },
+      {
+        label: '关闭',
+        role: 'close'
+      },
+    ],
+  },
+  {
     label: '帮助',
     role: 'help',
     submenu: [
